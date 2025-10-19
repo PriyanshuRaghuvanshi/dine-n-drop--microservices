@@ -1,0 +1,159 @@
+version: "3.9"
+services:
+  # ---------- Service Discovery ----------
+  service-discovery:
+    build: ./service-discovery
+    ports:
+      - "8001:8001"
+    networks:
+      - dineNdrop
+
+  # ---------- API Gateway ----------
+  api-gateway:
+    build: ./api-gateway
+    ports:
+      - "8005:8005"
+    depends_on:
+      - service-discovery
+    environment:
+      - EUREKA_SERVER=http://service-discovery:8001/eureka
+    networks:
+      - dineNdrop
+
+  # ---------- Auth Service ----------
+  auth-service:
+    build: ./auth-service
+    ports:
+      - "8002:8002"
+    depends_on:
+      - service-discovery
+    environment:
+      - EUREKA_SERVER=http://service-discovery:8001/eureka
+    networks:
+      - dineNdrop
+
+  # ---------- Restaurant Service ----------
+  restaurant-db:
+    image: postgres:15
+    environment:
+      POSTGRES_DB: restaurantdb
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    ports:
+      - "5433:5432"
+    networks:
+      - dineNdrop
+
+  restaurant-service:
+    build: ./restaurant-service
+    ports:
+      - "8006:8006"
+    depends_on:
+      - restaurant-db
+      - service-discovery
+    environment:
+      - SPRING_DATASOURCE_URL=jdbc:postgresql://restaurant-db:5432/restaurantdb
+      - SPRING_DATASOURCE_USERNAME=postgres
+      - SPRING_DATASOURCE_PASSWORD=postgres
+      - EUREKA_SERVER=http://service-discovery:8001/eureka
+    networks:
+      - dineNdrop
+
+  # ---------- Dining Service ----------
+  dining-db:
+    image: postgres:15
+    environment:
+      POSTGRES_DB: diningdb
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    ports:
+      - "5434:5432"
+    networks:
+      - dineNdrop
+
+  dining-service:
+    build: ./dining-service
+    ports:
+      - "8007:8007"
+    depends_on:
+      - dining-db
+      - service-discovery
+    environment:
+      - SPRING_DATASOURCE_URL=jdbc:postgresql://dining-db:5432/diningdb
+      - SPRING_DATASOURCE_USERNAME=postgres
+      - SPRING_DATASOURCE_PASSWORD=postgres
+      - EUREKA_SERVER=http://service-discovery:8001/eureka
+    networks:
+      - dineNdrop
+
+  # ---------- Order Service ----------
+  order-db:
+    image: postgres:15
+    environment:
+      POSTGRES_DB: orderdb
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    ports:
+      - "5435:5432"
+    networks:
+      - dineNdrop
+
+  rabbitmq:
+    image: rabbitmq:3-management
+    ports:
+      - "5672:5672"
+      - "15672:15672"  # Management UI
+    networks:
+      - dineNdrop
+
+  order-service:
+    build: ./order-service
+    ports:
+      - "8008:8008"
+    depends_on:
+      - order-db
+      - rabbitmq
+      - service-discovery
+    environment:
+      - SPRING_DATASOURCE_URL=jdbc:postgresql://order-db:5432/orderdb
+      - SPRING_DATASOURCE_USERNAME=postgres
+      - SPRING_DATASOURCE_PASSWORD=postgres
+      - SPRING_RABBITMQ_HOST=rabbitmq
+      - SPRING_RABBITMQ_PORT=5672
+      - EUREKA_SERVER=http://service-discovery:8001/eureka
+    networks:
+      - dineNdrop
+
+  # ---------- Payment Service ----------
+  payment-service:
+    build: ./payment-service
+    ports:
+      - "8084:8084"
+    depends_on:
+      - rabbitmq
+      - service-discovery
+    environment:
+      - SPRING_RABBITMQ_HOST=rabbitmq
+      - SPRING_RABBITMQ_PORT=5672
+      - EUREKA_SERVER=http://service-discovery:8001/eureka
+    networks:
+      - dineNdrop
+
+  # ---------- Notification Service ----------
+  notification-service:
+    build: ./notification-service
+    ports:
+      - "8004:8004"
+    depends_on:
+      - rabbitmq
+      - service-discovery
+    environment:
+      - SPRING_RABBITMQ_HOST=rabbitmq
+      - SPRING_RABBITMQ_PORT=5672
+      - EUREKA_SERVER=http://service-discovery:8001/eureka
+    networks:
+      - dineNdrop
+
+networks:
+  dineNdrop:
+    driver: bridge
